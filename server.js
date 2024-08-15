@@ -1,45 +1,66 @@
-const WebSocket = require('ws');
-const express = require('express');
-const app = express();
-const port = 3000;
+const WebSocket = require("ws");
 
-// Initialize a WebSocket Server
-const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-});
+const wss = new WebSocket.Server({ port: 3000 });
 
-const wss = new WebSocket.Server({ server });
+function generateOrderUpdates({
+  startId = 1,
+  count = 10,
+  initialPrice = 100,
+  initialTriggerPrice = 50,
+  priceType = "MKT",
+  status = "open",
+  symbol = "TATA",
+}) {
+  const updates = [];
 
-let orderId = 1000;
+  for (let i = 0; i < count; i++) {
+    updates.push({
+      AppOrderID: startId + i,
+      price: initialPrice + i * 1.5, // Different logic for price increment
+      triggerPrice: initialTriggerPrice + i * 1.2, // Different logic for trigger price increment
+      priceType,
+      productType: "standard",
+      status,
+      exchange: "BSE", // Changed exchange for variation
+      symbol,
+    });
+  }
 
-function sendOrderUpdate(ws, numUpdates, delay) {
-    setTimeout(() => {
-        for (let i = 0; i < numUpdates; i++) {
-            const update = {
-                AppOrderID: orderId++,
-                price: Math.random() * 100,
-                triggerPrice: Math.random() * 100,
-                priceType: ['MKT', 'LMT', 'SL-LMT'][Math.floor(Math.random() * 3)],
-                status: ['complete', 'open', 'pending', 'cancelled'][Math.floor(Math.random() * 4)],
-                exchange: 'NSE',
-                symbol: ['IDEA', 'RELIANCE', 'TATA', 'BAJAJ', 'WIPRO', 'ONGC'][Math.floor(Math.random() * 6)]
-            };
-            ws.send(JSON.stringify(update));
-            console.log(`Sent update: ${JSON.stringify(update)}`);
-        }
-    }, delay);
+  return updates;
 }
 
-wss.on('connection', (ws) => {
-    console.log('Client connected');
+function sendOrderUpdates(ws) {
+  const updates = [
+    ...generateOrderUpdates({ startId: 1, count: 10, initialPrice: 100, initialTriggerPrice: 90, priceType: "MKT", status: "complete", symbol: "ABC" }),
+    ...generateOrderUpdates({ startId: 11, count: 20, initialPrice: 200, initialTriggerPrice: 190, priceType: "LMT", status: "open", symbol: "DEF" }),
+    ...generateOrderUpdates({ startId: 31, count: 40, initialPrice: 300, initialTriggerPrice: 290, priceType: "SL-LMT", status: "pending", symbol: "IGH" }),
+    ...generateOrderUpdates({ startId: 71, count: 30, initialPrice: 400, initialTriggerPrice: 390, priceType: "SL-MKT", status: "complete", symbol: "JKL" }),
+    ...generateOrderUpdates({ startId: 41, count: 5, initialPrice: 150, initialTriggerPrice: 140, priceType: "MKT", status: "cancelled", symbol: "NFLX" }),
+  ];
 
-    // Sending updates as per the assignment details
-    sendOrderUpdate(ws, 10, 0); // First 10 updates in 1 second
-    sendOrderUpdate(ws, 20, 2000); // Next 20 updates after 2 seconds
-    sendOrderUpdate(ws, 40, 5000); // 40 updates after 3 seconds
-    sendOrderUpdate(ws, 30, 10000); // Final 30 updates after 5 seconds
+  const sendUpdatesWithDelay = (updatesSlice, delay) => {
+    setTimeout(() => {
+      updatesSlice.forEach((update) => {
+        const time = new Date().toLocaleTimeString();
+        ws.send(JSON.stringify(update));
+        console.log(`[${time}] Sent update: ${JSON.stringify(update)}`);
+      });
+    }, delay);
+  };
 
-    ws.on('close', () => {
-        console.log('Client disconnected');
-    });
+  sendUpdatesWithDelay(updates.slice(0, 10), 1000);
+  sendUpdatesWithDelay(updates.slice(10, 30), 2000);
+  sendUpdatesWithDelay(updates.slice(30, 70), 3000);
+  sendUpdatesWithDelay(updates.slice(70, 100), 5000);
+}
+
+wss.on("connection", (ws) => {
+  console.log("Client connected");
+  sendOrderUpdates(ws);
+
+  ws.on("close", () => {
+    console.log("Client disconnected");
+  });
 });
+
+console.log("WebSocket server running on ws://localhost:3000");
